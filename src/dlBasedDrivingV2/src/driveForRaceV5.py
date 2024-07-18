@@ -263,7 +263,7 @@ class AutonomousDrivingNode:
     def create_trajectory_masks(self):
         car_position = (self.car_center_x, self.car_TR_center_y)
         image_size = (self.height, self.width)
-        trajectory_masks = [self.create_trajectory_mask(angle, car_position, self.car_width+0.8, self.car_height, image_size) for angle in range(-20, 21)]
+        trajectory_masks = [self.create_trajectory_mask(angle, car_position, self.car_width+0.01/self.resolution, self.car_height, image_size) for angle in range(-20, 21)]
         return trajectory_masks
     
     def create_trajectory_mask(self, angle, car_position, car_width, car_height, image_size, decay_factor=1.2):
@@ -272,7 +272,7 @@ class AutonomousDrivingNode:
         mask = np.zeros(larger_size, dtype=np.float32)
         cx, cy = car_position
         offset_x, offset_y = image_size[1] // 2, image_size[0] // 2
-
+        # print(car_width)
         if angle == 0:
             for t in np.arange(0, 1.8/ self.resolution, 0.5):
                 y = int(cy - t) + offset_y
@@ -349,7 +349,7 @@ if __name__ == '__main__':
         # startTime = time.time()
         # transformedImage = lane_masker.warp_transform(image,lane_masker.width, lane_masker.height)
         # # print(time.time()-startTime)
-        # lane1_mask, lane2_mask, corners = lane_masker.create_lane_masks(transformedImage)
+        # lane1_mask, lane2_mask = lane_masker.create_lane_masks(transformedImage)
         
         # # Combine masks with different colors
         # colored_image = transformedImage.copy()
@@ -362,9 +362,9 @@ if __name__ == '__main__':
         # print(time.time()-startTime)
         # print(lane1P, lane2P)
 
-        # # for i in range(len(lane_masker.trajectory_masks)):
-        # #     cv2.imshow('trajectory_masks'+str(i), lane_masker.trajectory_masks[i])
-        # # cv2.waitKey(50000)
+        # for i in range(len(lane_masker.trajectory_masks)):
+        #     cv2.imshow('trajectory_masks', lane_masker.trajectory_masks[i])
+        #     cv2.waitKey(500)
 
 
         # current_lane_mask = lane1_mask if lane1P > lane2P else lane2_mask
