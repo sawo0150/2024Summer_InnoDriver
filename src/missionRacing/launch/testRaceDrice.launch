@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<launch>
+    <!-- <include file="$(find visionMapping)/launch/usb_cam.launch"/>  -->
+    <node name="data_publisher" pkg="missionRacing" type="fakeDataPublisher.py" output="screen"/>
+    <!-- <node name="map_server" pkg="map_server" type="map_server" args="$(find visionMapping)/map/map_test.yaml" /> -->
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find missionRacing)/launch/testRacing.rviz" />
+    <!-- <include file="$(find visionMapping)/launch/rosserial.launch"/> -->
+
+    <node name="lane_analizer" pkg="missionRacing" type="raceLaneAnalizer.py" output="screen"/>
+
+    <!-- <node name="stanley_controller" pkg="missionRacing" type="raceDrivingNode.py" output="screen"/> -->
+</launch>

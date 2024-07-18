@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<launch>
+    <include file="$(find visionMapping)/launch/usb_cam.launch"/> 
+    <include file="$(find visionMapping)/launch/rosserial.launch"/>
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find missionRacing)/launch/testRacing.rviz" />
+    <node name="keyboard_control_node" pkg="dlBasedDrivingV2" type="keyboardControlNode.py" output="screen"/>
+
+    <!-- <node name="transformed_image_publisher" pkg="dlBasedDriving" type="transformedImagePublisher.py" output="screen"/> -->
+    <node name="lane_analizer" pkg="missionRacing" type="raceLaneAnalizerV2.py" output="screen"/>
+    <node name="decision_node" pkg="missionRacing" type="decisionBasedSensor.py" output="screen"/>
+</launch>

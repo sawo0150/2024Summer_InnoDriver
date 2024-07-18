@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<launch>
+
+ <!-- <include file="$(find dQN_modelTraining)/launch/usb_cam.launch"/>  -->
+ <include file="$(find dQN_modelTraining)/launch/rosserial.launch"/>
+
+  <!-- DDPG_OnTraining.py 노드 실행 -->
+  <node name="self_driving_env" pkg="dQN_modelTraining" type="DDPG_OnPolicyTraining.py" output="screen"/>
+
+</launch>

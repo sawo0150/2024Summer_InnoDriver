@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<launch>
+
+ <include file="$(find dQN_modelTraining)/launch/usb_cam.launch"/> 
+ <include file="$(find dQN_modelTraining)/launch/rosserial.launch"/>
+
+  <!-- joystick_publisher.py 노드 실행 -->
+  <node name="joystick_publisher" pkg="dQN_modelTraining" type="joystick_publisher.py" output="screen"/>
+
+  <!-- joystick_CarControllerTest.py 노드 실행 -->
+  <node name="joystick_car_controller" pkg="dQN_modelTraining" type="joystick_CarControllerTest.py" output="screen"/>
+
+</launch>

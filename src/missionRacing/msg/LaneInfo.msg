@@ -1,0 +1,4 @@
+int32 current_lane
+int32 obstacle_lane
+float32 obstacle_distance
+float32 lane_angle

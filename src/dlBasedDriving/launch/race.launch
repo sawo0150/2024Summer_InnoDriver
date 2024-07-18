@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<launch>
+    <include file="$(find dQN_modelTraining)/launch/usb_cam.launch"/> 
+    <include file="$(find dQN_modelTraining)/launch/rosserial.launch"/>
+    <!-- <node name="map_server" pkg="map_server" type="map_server" args="$(find visionMapping)/map/map_test.yaml" /> -->
+    <!-- <node name="rviz" pkg="rviz" type="rviz" args="-d $(find visionMapping)/launch/config.rviz" /> -->
+    <!-- <include file="$(find visionMapping)/launch/rosserial.launch"/> -->
+
+    <node name="transformed_image_publisher" pkg="dlBasedDriving" type="transformedImagePublisher.py" output="screen"/>
+    <node name="drive_for_race" pkg="dlBasedDriving" type="driveForRace.py" output="screen"/>
+</launch>

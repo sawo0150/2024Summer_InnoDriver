@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<launch>
+
+ <include file="$(find visionMapping)/launch/usb_cam.launch"/> 
+ <node name="map_server" pkg="map_server" type="map_server" args="$(find visionMapping)/map/map_test.yaml" />
+ <node name="rviz" pkg="rviz" type="rviz" args="-d $(find visionMapping)/launch/config.rviz" />
+
+ <include file="$(find visionMapping)/launch/rosserial.launch"/>
+
+  <!-- joystick_publisher.py 노드 실행 -->
+  <node name="joystick_publisher" pkg="dQN_modelTraining" type="joystick_publisher.py" output="screen"/>
+
+  <!-- joystick_CarControllerTest.py 노드 실행 -->
+  <node name="joystick_car_controller" pkg="dQN_modelTraining" type="joystick_CarControllerTest.py" output="screen"/>
+
+</launch>

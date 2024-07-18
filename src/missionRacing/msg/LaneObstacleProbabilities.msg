@@ -1,0 +1,5 @@
+# LaneObstacleProbabilities.msg
+std_msgs/Float32MultiArray lane_probabilities
+std_msgs/Float32MultiArray obstacle_Lane1probabilities
+std_msgs/Float32MultiArray obstacle_Lane2probabilities
+std_msgs/Float32MultiArray obstacle_distances

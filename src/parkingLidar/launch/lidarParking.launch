@@ -1,0 +1,8 @@
+<launch>
+    <include file="$(find parkingLidar)/launch/rplidar_a2m12.launch"/>
+<!-- lsusb / dmesg | grep ttyUSB / ls /dev/ttyUSB* -->
+
+    <node name="lidar_mask_node" pkg="parkingLidar" type="findParkingSpace.py"/>
+    <!-- <node name="obstacle_detection" pkg="lidar" type="lidar_lanechange_flag.py"/> -->
+    
+</launch>

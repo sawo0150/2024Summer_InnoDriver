@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<launch>
+
+    <node name="serial_node"        pkg="rosserial_python"      type="serial_node.py">
+    <param name="port"              type="string"               value="/dev/ttyUSB0"/>
+    <param name="baud"              type="int"                  value="57600"/>
+    </node>
+
+</launch>
+
+<!-- 터미널 명령어 : dmesg | grep tty -->
+<!-- 터미널 명령어 : dmesg | grep tty -->
+<!-- /dev/ttyACM0 (아두이노 우노 - 정품)
+/dev/ttyUSB0 (아두이노 메가 - 호환) -->
