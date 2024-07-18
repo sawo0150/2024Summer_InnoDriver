@@ -46,9 +46,13 @@ class LaneAnalizer:
         self.car_height = int(self.carBoxHeight /self.resolution)
 
         # 초음파 센서 관련 초기화
-        self.num_sensors = 5  # 예제 값, 실제 센서 개수로 변경
-        self.sensor_positions = [(0.4, -0.2), (0.2, -0.3), (0, -0.4), (-0.2, -0.3), (-0.4, -0.2)]  # 예제 값, 실제 센서 위치로 변경
-        self.sensor_angles = [0, np.pi / 4, np.pi / 2, 3*np.pi / 4, np.pi]  # 예제 값, 실제 센서 각도로 변경
+        # self.num_sensors = 5  # 예제 값, 실제 센서 개수로 변경
+        # self.sensor_positions = [(0.4, -0.2), (0.2, -0.3), (0, -0.4), (-0.2, -0.3), (-0.4, -0.2)]  # 예제 값, 실제 센서 위치로 변경
+        # self.sensor_angles = [0, np.pi / 4, np.pi / 2, 3*np.pi / 4, np.pi]  # 예제 값, 실제 센서 각도로 변경
+        # self.distances = [0] * self.num_sensors
+        self.num_sensors = 1  # 예제 값, 실제 센서 개수로 변경
+        self.sensor_positions = [(0, -0.4)]  # 예제 값, 실제 센서 위치로 변경
+        self.sensor_angles = [np.pi / 2]  # 예제 값, 실제 센서 각도로 변경
         self.distances = [0] * self.num_sensors
         self.obstacle_radius = 0.5
 
@@ -73,9 +77,9 @@ class LaneAnalizer:
         self.goalLane = 0
 
         #Unet Model Variable
-        self.checkpoints_path = '/home/innodriver/InnoDriver_ws/Unet_train/checkpoints/vgg_unet.49'  # 최신 체크포인트 파일 경로
+        # self.checkpoints_path = '/home/innodr`iver/InnoDriver_ws/Unet_train/checkpoints/vgg_unet.49'  # 최신 체크포인트 파일 경로
         self.model = None
-        self.model = self.load_model(self.checkpoints_path)
+        # self.model = self.load_model(self.che`ckpoints_path)
 
         self.currentAngle = 0
         self.error = False
@@ -241,7 +245,7 @@ class LaneAnalizer:
         lane2_probabilities = []
         distances_within_range = []
         for i in range(self.num_sensors):
-            distance = self.distances[i]/1000+self.obstacle_radius
+            distance = self.distances[i]/100+self.obstacle_radius
             if distance > 4:
                 lane1_probabilities.append(0)
                 lane2_probabilities.append(0)
@@ -286,10 +290,10 @@ class LaneAnalizer:
     def create_trajectory_masks(self):
         car_position = (self.car_center_x, self.car_TR_center_y)
         image_size = (self.height, self.width)
-        trajectory_masks = [self.create_trajectory_mask(angle, car_position, self.car_width+1, self.car_height, image_size) for angle in range(-20, 21)]
+        trajectory_masks = [self.create_trajectory_mask(angle, car_position, self.car_width+0.6, self.car_height, image_size) for angle in range(-20, 21)]
         return trajectory_masks
     
-    def create_trajectory_mask(self, angle, car_position, car_width, car_height, image_size, resolution=0.1, decay_factor=0.1):
+    def create_trajectory_mask(self, angle, car_position, car_width, car_height, image_size, decay_factor=1.2):
         # 더 큰 임시 마스크 생성
         larger_size = (image_size[0] * 2, image_size[1] * 2)
         mask = np.zeros(larger_size, dtype=np.float32)
@@ -297,18 +301,18 @@ class LaneAnalizer:
         offset_x, offset_y = image_size[1] // 2, image_size[0] // 2
 
         if angle == 0:
-            for t in np.arange(0, 10 / resolution, 1):
+            for t in np.arange(0, 1.8/ self.resolution, 0.5):
                 y = int(cy - t) + offset_y
                 x1 = int(cx - car_width // 2) + offset_x
                 x2 = int(cx + car_width // 2) + offset_x
                 if y < 0 or x1 < 0 or x2 >= larger_size[1]:
                     break
-                mask[y, x1:x2] = np.exp(-decay_factor * t * resolution)
+                mask[y, x1:x2] = np.exp(-decay_factor * t * self.resolution)
         else:
             radius = np.abs(car_height / np.tan(np.radians(angle)))
             center_x = cx + (radius if angle > 0 else (0-radius)) + offset_x
 
-            for t in np.arange(0, 10 / resolution, 0.5):
+            for t in np.arange(0, 1.8/ self.resolution, 0.5):
                 theta = t / radius
                 y = int(cy - radius * np.sin(theta)) + offset_y
                 x_center = int(cx - radius * (1 - np.cos(theta))) + offset_x
@@ -335,7 +339,7 @@ class LaneAnalizer:
                     break
 
                 # Draw lines between (x_left, y_left) and (x_right, y_right)
-                cv2.line(mask, (x_left, y_left), (x_right, y_right), np.exp(-decay_factor * t * resolution), thickness=1)
+                cv2.line(mask, (x_left, y_left), (x_right, y_right), np.exp(-decay_factor * t * self.resolution), thickness=1)
 
         # 원래 크기로 자르기
         mask = mask[offset_y:image_size[0] + offset_y, offset_x:image_size[1] + offset_x]

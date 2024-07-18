@@ -35,7 +35,7 @@ class AutonomousDrivingNode:
         self.car_box_dist = 0.61
         self.car_center_x = int(self.width / 2)
         self.car_center_y = self.height - int(self.car_box_dist / self.resolution/2)
-        self.car_TR_center_y = self.height + int(self.car_box_dist / self.resolution/2)
+        self.car_TR_center_y = self.height + int((self.car_box_dist+0.3) / self.resolution/2)
         self.car_width = int(self.carWidth /self.resolution)
         self.car_height = int(self.carBoxHeight /self.resolution)
         # 초음파 센서 관련 초기화
@@ -107,8 +107,8 @@ class AutonomousDrivingNode:
             current_lane_mask = lane1_mask if self.goalLane==1 else lane2_mask
             self.currentAngle = self.calculate_optimal_steering(current_lane_mask)
             
-            pulse_range = 150 - 50
-            pulse = 150 - (np.abs(self.currentAngle)/self.max_Angle * pulse_range)
+            pulse_range = 250 - 150
+            pulse = 250 - (np.abs(self.currentAngle)/self.max_Angle * pulse_range)
             
             # If not running, set pulse to 0
             if (not self.running) or (self.error):
@@ -263,10 +263,10 @@ class AutonomousDrivingNode:
     def create_trajectory_masks(self):
         car_position = (self.car_center_x, self.car_TR_center_y)
         image_size = (self.height, self.width)
-        trajectory_masks = [self.create_trajectory_mask(angle, car_position, self.car_width+2, self.car_height, image_size) for angle in range(-20, 21)]
+        trajectory_masks = [self.create_trajectory_mask(angle, car_position, self.car_width+0.8, self.car_height, image_size) for angle in range(-20, 21)]
         return trajectory_masks
     
-    def create_trajectory_mask(self, angle, car_position, car_width, car_height, image_size, resolution=0.1, decay_factor=0.3):
+    def create_trajectory_mask(self, angle, car_position, car_width, car_height, image_size, decay_factor=1.2):
         # 더 큰 임시 마스크 생성
         larger_size = (image_size[0] * 2, image_size[1] * 2)
         mask = np.zeros(larger_size, dtype=np.float32)
@@ -274,18 +274,18 @@ class AutonomousDrivingNode:
         offset_x, offset_y = image_size[1] // 2, image_size[0] // 2
 
         if angle == 0:
-            for t in np.arange(0, 10 / resolution, 1):
+            for t in np.arange(0, 1.8/ self.resolution, 0.5):
                 y = int(cy - t) + offset_y
                 x1 = int(cx - car_width // 2) + offset_x
                 x2 = int(cx + car_width // 2) + offset_x
                 if y < 0 or x1 < 0 or x2 >= larger_size[1]:
                     break
-                mask[y, x1:x2] = np.exp(-decay_factor * t * resolution)
+                mask[y, x1:x2] = np.exp(-decay_factor * t * self.resolution)
         else:
             radius = np.abs(car_height / np.tan(np.radians(angle)))
             center_x = cx + (radius if angle > 0 else (0-radius)) + offset_x
 
-            for t in np.arange(0, 10 / resolution, 0.5):
+            for t in np.arange(0, 1.8/ self.resolution, 0.5):
                 theta = t / radius
                 y = int(cy - radius * np.sin(theta)) + offset_y
                 x_center = int(cx - radius * (1 - np.cos(theta))) + offset_x
@@ -312,7 +312,7 @@ class AutonomousDrivingNode:
                     break
 
                 # Draw lines between (x_left, y_left) and (x_right, y_right)
-                cv2.line(mask, (x_left, y_left), (x_right, y_right), np.exp(-decay_factor * t * resolution), thickness=1)
+                cv2.line(mask, (x_left, y_left), (x_right, y_right), np.exp(-decay_factor * t * self.resolution), thickness=1)
 
         # 원래 크기로 자르기
         mask = mask[offset_y:image_size[0] + offset_y, offset_x:image_size[1] + offset_x]

@@ -1,5 +1,6 @@
 
 #include <Car_Library.h>
+#include <NewPing.h>
 #include <ros.h>
 #include <std_msgs/Int16.h>
 #include <std_msgs/Int32.h>
@@ -57,11 +58,18 @@ int EC_right = 12;
 int once = 1;
 
 //초음파 센서 setting
-const int numSensors = 5;  // 사용할 초음파 센서의 개수
-const int trigPins[numSensors] = {24, 26, 28, 30, 32};  // 트리거 핀 배열
-const int echoPins[numSensors] = {25, 27, 29, 31, 33};  // 에코 핀 배열
+const int numSensors = 1;  // 사용할 초음파 센서의 개수
+// const int trigPins[numSensors] = {24, 26, 28, 30, 32};  // 트리거 핀 배열
+// const int echoPins[numSensors] = {25, 27, 29, 31, 33};  // 에코 핀 배열
+const int trigPins[numSensors] = {3};  // 트리거 핀 배열
+const int echoPins[numSensors] = {2};  // 에코 핀 배열
 float distances[numSensors];  // 거리 값을 저장할 배열
 int ultraIndex = 0;
+// 트리거 및 에코 핀을 출력/입력 모드로 설정
+//sonar(TrigPin, EchoPin, MaxDistance);
+NewPing sonar[numSensors] = { 
+  NewPing(trigPins[0], echoPins[0], 600)
+};
 
 void Motor_Forward(int Speed, int IN1, int IN2, int PWM) {
      digitalWrite(IN1, HIGH);
@@ -176,11 +184,6 @@ void setup() {
   pinMode(motor_front_PWM,OUTPUT);
 
   pinMode(analogPin,INPUT);
-  // 트리거 및 에코 핀을 출력/입력 모드로 설정
-  for (int i = 0; i < numSensors; i++) {
-      pinMode(trigPins[i], OUTPUT);
-      pinMode(echoPins[i], INPUT);
-  }
   
   left_tilt(200);
   delay(4000);
@@ -221,10 +224,10 @@ void loop() {
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
     // 초음파 센서 값 읽기
-    read_ultrasonics(ultraIndex);
+    distances[ultraIndex] = sonar[ultraIndex].ping_cm();
     distance_msg.data[ultraIndex] = distances[ultraIndex];
     ultraIndex+=1;
-    if (ultraIndex>4){
+    if (ultraIndex>=numSensors){
       ultraIndex = 0;
       pub2.publish(&distance_msg);
     }
@@ -241,10 +244,10 @@ void loop() {
   // delay를 사용하여 PID 제어 주기를 조절할 수 있습니다.
   // 필요에 따라 PID 제어의 빈도를 더 높이거나 낮출 수 있습니다.
 
-  for(int i=0; i<5; i++){
-    change_angle(goal_steer);
-    delay(5); // 예시로 0.01초마다 PID 제어를 수행합니다.
-  }
+  // for(int i=0; i<5; i++){
+  //   change_angle(goal_steer);
+  //   delay(5); // 예시로 0.01초마다 PID 제어를 수행합니다.
+  // }
 
   Motor_Forward(goal_pulse_right, motor_right_1, motor_right_2, motor_right_PWM);  // Forward, PWM setting 0-255
   Motor_Forward(goal_pulse_left, motor_left_1, motor_left_2, motor_left_PWM);  
