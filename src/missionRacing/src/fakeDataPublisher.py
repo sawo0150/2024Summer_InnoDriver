@@ -14,12 +14,12 @@ class DataPublisher:
         rospy.init_node('data_publisher', anonymous=True)
         
         # Publisher
-        self.image_pub = rospy.Publisher("/usb_cam/image_raw", Image, queue_size=10)
+        self.image_pub = rospy.Publisher("/camera1/usb_cam1/image_raw", Image, queue_size=10)
 
-        self.rate = rospy.Rate(10)  # 10hz
+        self.rate = rospy.Rate(5)  # 10hz
 
         # Image directory
-        self.images_dir = '/home/innodriver/InnoDriver_ws/src/dQN_modelTraining/offPolicyLearningData/images'
+        self.images_dir = '/home/innodriver/InnoDriver_ws/Data/20240722_200700/images1'
 
         # Get list of image files
         self.image_files = sorted(glob.glob(os.path.join(self.images_dir, '*.jpg')))

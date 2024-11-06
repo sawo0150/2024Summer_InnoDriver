@@ -21,7 +21,7 @@ class LaneAnalizer:
         self.pub_goal = rospy.Publisher('calculated_goal_state', Float64MultiArray, queue_size=2)
 
         # Publisher
-        rospy.Subscriber("/usb_cam/image_raw", Image, self.image_callback, queue_size=2)
+        rospy.Subscriber("/camera1/usb_cam1/image_raw", Image, self.image_callback, queue_size=2)
 
         # Publisher 초기화 부분
         self.pub_lane_obstacle_probabilities = rospy.Publisher('lane_obstacle_probabilities', LaneObstacleProbabilities, queue_size=2)
@@ -76,10 +76,19 @@ class LaneAnalizer:
         self.isStart = False
         self.goalLane = 0
 
+        # GPU 메모리 증가 설정
+        gpus = tf.config.experimental.list_physical_devices('GPU')
+        if gpus:
+            try:
+                for gpu in gpus:
+                    tf.config.experimental.set_memory_growth(gpu, True)
+            except RuntimeError as e:
+                print(e)
+
         #Unet Model Variable
-        # self.checkpoints_path = '/home/innodr`iver/InnoDriver_ws/Unet_train/checkpoints/vgg_unet.49'  # 최신 체크포인트 파일 경로
-        self.model = None
-        # self.model = self.load_model(self.che`ckpoints_path)
+        self.checkpoints_path = '/home/innodriver/InnoDriver_ws/Unet_train/checkpoints/mobile_unet.58'  # 최신 체크포인트 파일 경로
+        self.unet_model = None
+        self.unet_model = self.load_model(self.checkpoints_path)
 
         self.currentAngle = 0
         self.error = False
@@ -89,9 +98,9 @@ class LaneAnalizer:
         self.tf_model_path = '/home/innodriver/InnoDriver_ws/yolo_train/best_saved_model'
 
         # 모델 로드
-        self.model = tf.saved_model.load(self.tf_model_path)
-        self.infer = self.model.signatures['serving_default']
-
+        self.yolo_model = tf.saved_model.load(self.tf_model_path)
+        self.yolo_infer = self.yolo_model.signatures['serving_default']
+        self.yoloLastTime = time.time()
 
     def control_callback(self, msg):
         self.running = msg.data
@@ -103,8 +112,8 @@ class LaneAnalizer:
     def image_callback(self, msg):
         try:
 
-            cv_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-            cv_image = self.warp_transform(cv_image,self.width, self.height)
+            image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            cv_image = self.warp_transform(image,self.width, self.height)
             lane1_mask, lane2_mask = self.create_lane_masks(cv_image)
             
             # Combine masks with different colors
@@ -137,41 +146,42 @@ class LaneAnalizer:
             # msg.data = [predicted_steering, 0]
             self.pub_goal.publish(msg)
 
+            if time.time()-self.yoloLastTime>1:
+                self.yoloLastTime = time.time()
+                # 전처리
+                input_tensor = self.preprocess(image)
+                # 추론
+                detections = self.yolo_predict(input_tensor)
+                # 장애물 위치 및 확률 계산
+                lane1_probabilities, lane2_probabilities, distanceObs = self.calculate_obstacle_probabilities(detections, cv_image, lane1_mask, lane2_mask)
+                print("Lane 1 Probabilities:", lane1_probabilities)
+                print("Lane 2 Probabilities:", lane2_probabilities)
+                print("obstacle distances", distanceObs)
 
-            # 전처리
-            input_tensor = self.preprocess(cv_image)
-            # 추론
-            detections = self.infer(input_tensor)
-            # 장애물 위치 및 확률 계산
-            lane1_probabilities, lane2_probabilities, distanceObs = self.calculate_obstacle_probabilities(detections, cv_image)
-            print("Lane 1 Probabilities:", lane1_probabilities)
-            print("Lane 2 Probabilities:", lane2_probabilities)
-            print("obstacle distances", distanceObs)
+                # 후처리 및 결과 시각화
+                output_image = self.postprocess(image, detections)
+                cv2.imshow('YOLOv5 Detection', output_image)
+                cv2.waitKey(1)
 
-            # 후처리 및 결과 시각화
-            output_image = self.postprocess(cv_image, detections)
-            cv2.imshow('YOLOv5 Detection', output_image)
-            cv2.waitKey(3)
+                # 확률 데이터 발행 부분
+                lane_obstacle_msg = LaneObstacleProbabilities()
+                
+                lane_probabilities = Float32MultiArray()
+                lane_probabilities.data = [lane1CP, lane2CP]
+                lane_obstacle_msg.lane_probabilities = lane_probabilities
+                
+                obstacleLane1_probabilities = Float32MultiArray()
+                obstacleLane2_probabilities = Float32MultiArray()
+                obstacleLane1_probabilities.data = lane1_probabilities
+                obstacleLane2_probabilities.data = lane2_probabilities
+                lane_obstacle_msg.obstacle_Lane1probabilities = obstacleLane1_probabilities
+                lane_obstacle_msg.obstacle_Lane2probabilities = obstacleLane2_probabilities
+                
+                obstacle_distances = Float32MultiArray()
+                obstacle_distances.data = distanceObs
+                lane_obstacle_msg.obstacle_distances = obstacle_distances
 
-            # 확률 데이터 발행 부분
-            lane_obstacle_msg = LaneObstacleProbabilities()
-            
-            lane_probabilities = Float32MultiArray()
-            lane_probabilities.data = [lane1CP, lane2CP]
-            lane_obstacle_msg.lane_probabilities = lane_probabilities
-            
-            obstacleLane1_probabilities = Float32MultiArray()
-            obstacleLane2_probabilities = Float32MultiArray()
-            obstacleLane1_probabilities.data = lane1_probabilities
-            obstacleLane2_probabilities.data = lane2_probabilities
-            lane_obstacle_msg.obstacle_Lane1probabilities = obstacleLane1_probabilities
-            lane_obstacle_msg.obstacle_Lane2probabilities = obstacleLane2_probabilities
-            
-            obstacle_distances = Float32MultiArray()
-            obstacle_distances.data = distanceObs
-            lane_obstacle_msg.obstacle_distances = obstacle_distances
-
-            self.pub_lane_obstacle_probabilities.publish(lane_obstacle_msg)
+                self.pub_lane_obstacle_probabilities.publish(lane_obstacle_msg)
 
             if np.sum(lane2_mask)+np.sum(lane1_mask)==0:
                 self.error = True
@@ -188,15 +198,25 @@ class LaneAnalizer:
         model.load_weights(checkpoints_path)
         return model
 
+    @tf.function
+    def yolo_predict(self, image):
+        return self.yolo_infer(image)
+
+    @tf.function
+    def unet_predict(self, frame_resized):
+        return self.unet_model.predict_segmentation(inp=frame_resized)
+    
+    # U-Net 예측
     def create_lane_masks(self, image):        
         # 이미지 크기를 모델 입력 크기에 맞게 조정
         empty_mask = np.zeros((self.height, self.width), dtype=bool)  # 빈 마스크 생성
-        if self.model is None:
+        if self.unet_model is None:
             rospy.logerr("Model is not loaded")
             return empty_mask, empty_mask
         try:
             frame_resized = cv2.resize(image, (224, 224))
-            segmented_image = self.model.predict_segmentation(inp=frame_resized)
+            # segmented_image = self.unet_predict(frame_resized)
+            segmented_image = self.unet_model.predict_segmentation(inp=frame_resized)
             
             # colored_image = image.copy()
             # colored_image[segmented_image == 1] = [255, 0, 0]  # Blue for 1st lane
@@ -259,12 +279,12 @@ class LaneAnalizer:
 
     def preprocess(self, image):
         # 이미지 전처리
-        input_tensor = cv2.resize(image, (640, 640))
+        input_tensor = cv2.resize(image, (320, 320))
         input_tensor = input_tensor / 255.0
         input_tensor = np.expand_dims(input_tensor, axis=0).astype(np.float32)
         return tf.convert_to_tensor(input_tensor)
 
-    def calculate_obstacle_probabilities(self, detections, cv_image):
+    def calculate_obstacle_probabilities(self, detections, cv_image, lane1_mask, lane2_mask):
         detection_boxes = detections['output_0'].numpy()
         h, w, _ = cv_image.shape
 
@@ -277,7 +297,9 @@ class LaneAnalizer:
             score = detection_boxes[0, i, 4]
             class_id = int(detection_boxes[0, i, 5])
             
-            if score < 0.5 or class_id != 2:  # class_id가 2인 경우가 'obstacle'인 경우
+            # if score < 0.5 or class_id != 2:  # class_id가 2인 경우가 'obstacle'인 경우
+            #     continue
+            if score < 0.5 or class_id != 0:  # class_id가 2인 경우가 'obstacle'인 경우
                 continue
             
             y1, x1, y2, x2 = box
@@ -297,12 +319,12 @@ class LaneAnalizer:
             transformed_x, transformed_y = int(transformed_point[0][0][0]), int(transformed_point[0][0][1])
 
             # 원 형태의 Mask 생성
-            obstacle_mask = np.zeros_like(self.lane1_mask)
+            obstacle_mask = np.zeros_like(lane1_mask, dtype=np.uint8)
             cv2.circle(obstacle_mask, (transformed_x, transformed_y), 10, 255, -1)
 
             # Lane mask와 내적하여 확률 계산
-            lane1_intersection = np.sum(self.lane1_mask * obstacle_mask)
-            lane2_intersection = np.sum(self.lane2_mask * obstacle_mask)
+            lane1_intersection = np.sum(lane1_mask * obstacle_mask)
+            lane2_intersection = np.sum(lane2_mask * obstacle_mask)
             total_intersection = np.sum(obstacle_mask)
 
             if total_intersection == 0:
@@ -312,7 +334,7 @@ class LaneAnalizer:
                 lane1_probability = lane1_intersection / total_intersection
                 lane2_probability = lane2_intersection / total_intersection
             
-            distance = ((self.car_center_x - transformed_x)**2 + (self.car_TR_center_y - transformed_y)**2)**0.5 / self.resolution
+            distance = ((self.car_center_x - transformed_x)**2 + (self.car_TR_center_y - transformed_y)**2)**0.5 * self.resolution
             
             lane1_probabilities.append(lane1_probability)
             lane2_probabilities.append(lane2_probability)
@@ -420,54 +442,56 @@ if __name__ == '__main__':
         lane_masker = LaneAnalizer()
         lane_masker.run()
 
-        # 이미지 파일 경로
-        # image_path = "/home/innodriver/InnoDriver_ws/src/missionRacing/src/1720785185578291177.jpg"
-        yoloTest_image_path = "/home/innodriver/InnoDriver_ws/src/missionRacing/src/1720785185578291177.jpg"
+        # # 이미지 파일 경로
+        # # image_path = "/home/innodriver/InnoDriver_ws/src/missionRacing/src/1720785185578291177.jpg"
+        # yoloTest_image_path = "/home/innodriver/InnoDriver_ws/src/missionRacing/src/1721213035652650594.jpg"
 
-        # 이미지 읽기
-        image = cv2.imread(yoloTest_image_path)
-        startTime = time.time()
-        transformedImage = lane_masker.warp_transform(image,lane_masker.width, lane_masker.height)
-        # # print(time.time()-startTime)
-        lane1_mask, lane2_mask = lane_masker.create_lane_masks(transformedImage)
+        # # 이미지 읽기
+        # # cv2.waitKey(3000)
+        # image = cv2.imread(yoloTest_image_path)
+        # startTime = time.time()
+        # transformedImage = lane_masker.warp_transform(image,lane_masker.width, lane_masker.height)
+        
+        # lane1_mask, lane2_mask = lane_masker.create_lane_masks(transformedImage)
         
         # # Combine masks with different colors
         # colored_image = transformedImage.copy()
         # colored_image[lane1_mask == 1] = [128, 0, 0]  # Blue for 1st lane
         # colored_image[lane2_mask == 1] = [0, 0, 128]  # Red for 2nd lane
         # cv2.imshow('Road Mask', colored_image)
-        # lPoint, rPoint = lane_masker.calculate_waypoints(corners)
-        # colored_image = lane_masker.draw_waypoints_on_mask(colored_image, lPoint, rPoint)
-        # lane1P, lane2P = lane_masker.calculate_carLane_probabilities(lane1_mask, lane2_mask)
-        # print(time.time()-startTime)
-        # print(lane1P, lane2P)
+        # # lPoint, rPoint = lane_masker.calculate_waypoints(corners)
+        # # colored_image = lane_masker.draw_waypoints_on_mask(colored_image, lPoint, rPoint)
+        # # lane1P, lane2P = lane_masker.calculate_carLane_probabilities(lane1_mask, lane2_mask)
+        # # print(time.time()-startTime)
+        # # print(lane1P, lane2P)
 
-        # # for i in range(len(lane_masker.trajectory_masks)):
-        # #     cv2.imshow('trajectory_masks'+str(i), lane_masker.trajectory_masks[i])
-        # # cv2.waitKey(50000)
+        # # # for i in range(len(lane_masker.trajectory_masks)):
+        # # #     cv2.imshow('trajectory_masks'+str(i), lane_masker.trajectory_masks[i])
+        # # # cv2.waitKey(50000)
 
 
-        # current_lane_mask = lane1_mask if lane1P > lane2P else lane2_mask
-        # optimal_steering_angle = lane_masker.calculate_optimal_steering(current_lane_mask)
-        # print(f"Optimal Steering Angle: {optimal_steering_angle} degrees")
-        # print(time.time()-startTime)
-        # cv2.imshow('waypoint Mask', colored_image)
-        # cv2.waitKey(10000)
+        # # current_lane_mask = lane1_mask if lane1P > lane2P else lane2_mask
+        # # optimal_steering_angle = lane_masker.calculate_optimal_steering(current_lane_mask)
+        # # print(f"Optimal Steering Angle: {optimal_steering_angle} degrees")
+        # # print(time.time()-startTime)
+        # # cv2.imshow('waypoint Mask', colored_image)
+        # # cv2.waitKey(10000)
         
-        # 전처리
-        input_tensor = LaneAnalizer.preprocess(image)
-        # 추론
-        detections = LaneAnalizer.infer(input_tensor)
-        # 장애물 위치 및 확률 계산
-        lane1_probabilities, lane2_probabilities, distanceObs = LaneAnalizer.calculate_obstacle_probabilities(detections, image)
-        print("Lane 1 Probabilities:", lane1_probabilities)
-        print("Lane 2 Probabilities:", lane2_probabilities)
-        print("obstacle distances", distanceObs)
+        # # 전처리
+        # input_tensor = lane_masker.preprocess(image)
+        # # 추론
+        # detections = lane_masker.yolo_predict(input_tensor)
+        # # 장애물 위치 및 확률 계산
+        # lane1_probabilities, lane2_probabilities, distanceObs = lane_masker.calculate_obstacle_probabilities(detections, image, lane1_mask, lane2_mask)
+        # print("Lane 1 Probabilities:", lane1_probabilities)
+        # print("Lane 2 Probabilities:", lane2_probabilities)
+        # print("obstacle distances", distanceObs)
 
-        # 후처리 및 결과 시각화
-        output_image = LaneAnalizer.postprocess(image, detections)
-        cv2.imshow('YOLOv5 Detection', output_image)
-        cv2.waitKey(3)
+        # # 후처리 및 결과 시각화
+        # output_image = lane_masker.postprocess(image, detections)
+        # print(time.time()-startTime)
+        # cv2.imshow('YOLOv5 Detection', output_image)
+        # cv2.waitKey(30000)
 
     except rospy.ROSInterruptException:
         pass

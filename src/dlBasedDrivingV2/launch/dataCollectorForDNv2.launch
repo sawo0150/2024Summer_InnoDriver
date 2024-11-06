@@ -2,7 +2,7 @@
 
 <launch>
 
- <include file="$(find dQN_modelTraining)/launch/usb_cam.launch"/> 
+ <include file="$(find dQN_modelTraining)/launch/multi_usb_cam.launch"/> 
  <include file="$(find dQN_modelTraining)/launch/rosserial.launch"/>
 
   <!-- joystick_publisher.py 노드 실행 -->

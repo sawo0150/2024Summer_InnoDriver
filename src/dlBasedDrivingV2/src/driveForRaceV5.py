@@ -101,7 +101,7 @@ class AutonomousDrivingNode:
             if not self.isStart and (np.sum(lane2_mask)+np.sum(lane1_mask))>0:
                 self.isStart =True
                 if lane1CP > lane2CP:
-                    self.goalLane = 1
+                    self.goalLane = 2
                 else:
                     self.goalLane = 2
             current_lane_mask = lane1_mask if self.goalLane==1 else lane2_mask
@@ -263,10 +263,10 @@ class AutonomousDrivingNode:
     def create_trajectory_masks(self):
         car_position = (self.car_center_x, self.car_TR_center_y)
         image_size = (self.height, self.width)
-        trajectory_masks = [self.create_trajectory_mask(angle, car_position, self.car_width+0.01/self.resolution, self.car_height, image_size) for angle in range(-20, 21)]
+        trajectory_masks = [self.create_trajectory_mask(angle, car_position, self.car_width+0.007/self.resolution, self.car_height, image_size) for angle in range(-20, 21)]
         return trajectory_masks
     
-    def create_trajectory_mask(self, angle, car_position, car_width, car_height, image_size, decay_factor=1.2):
+    def create_trajectory_mask(self, angle, car_position, car_width, car_height, image_size, decay_factor=0.9):
         # 더 큰 임시 마스크 생성
         larger_size = (image_size[0] * 2, image_size[1] * 2)
         mask = np.zeros(larger_size, dtype=np.float32)
@@ -274,7 +274,7 @@ class AutonomousDrivingNode:
         offset_x, offset_y = image_size[1] // 2, image_size[0] // 2
         # print(car_width)
         if angle == 0:
-            for t in np.arange(0, 1.8/ self.resolution, 0.5):
+            for t in np.arange(0, 1.9/ self.resolution, 0.5):
                 y = int(cy - t) + offset_y
                 x1 = int(cx - car_width // 2) + offset_x
                 x2 = int(cx + car_width // 2) + offset_x
@@ -285,7 +285,7 @@ class AutonomousDrivingNode:
             radius = np.abs(car_height / np.tan(np.radians(angle)))
             center_x = cx + (radius if angle > 0 else (0-radius)) + offset_x
 
-            for t in np.arange(0, 1.8/ self.resolution, 0.5):
+            for t in np.arange(0, 1.9/ self.resolution, 0.5):
                 theta = t / radius
                 y = int(cy - radius * np.sin(theta)) + offset_y
                 x_center = int(cx - radius * (1 - np.cos(theta))) + offset_x

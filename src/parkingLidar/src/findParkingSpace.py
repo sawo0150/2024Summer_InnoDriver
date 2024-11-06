@@ -19,11 +19,12 @@ class LidarMask:
         self.mask.fill(0)  # Clear the mask
         angle_min = scan_data.angle_min
         angle_increment = scan_data.angle_increment
+        print(angle_min, angle_increment)
         
         for i, range in enumerate(scan_data.ranges):
             if range == float('inf') or range == float('-inf') or range == 0.0:
                 continue
-            angle = angle_min + i * angle_increment
+            angle = np.pi +angle_min - i * angle_increment
             x = int(self.radius + (range / self.resolution) * np.cos(angle))
             y = int(self.radius + (range / self.resolution) * np.sin(angle))
             if 0 <= x < self.image_size and 0 <= y < self.image_size:

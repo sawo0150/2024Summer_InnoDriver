@@ -3,7 +3,7 @@
 import rospy
 import cv2
 import numpy as np
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, LaserScan
 from std_msgs.msg import Float32MultiArray, Float64MultiArray, Bool,Int32,Float32
 from cv_bridge import CvBridge, CvBridgeError
 import os
@@ -21,7 +21,7 @@ class LaneAnalizer:
 
         # Publisher
         rospy.Subscriber("/camera1/usb_cam1/image_raw", Image, self.image_callback, queue_size=2)
-        rospy.Subscriber('ultraDistance', Float64MultiArray, self.ultrasonic_callback)
+        self.scan_sub = rospy.Subscriber('/scan', LaserScan, self.scan_callback)
 
         # Publisher 초기화 부분
         self.pub_lane_obstacle_probabilities = rospy.Publisher('lane_obstacle_probabilities', LaneObstacleProbabilities, queue_size=2)
@@ -55,6 +55,7 @@ class LaneAnalizer:
         self.sensor_angles = [np.pi / 2]  # 예제 값, 실제 센서 각도로 변경
         self.distances = [0] * self.num_sensors
         self.obstacle_radius = 0.5
+        self.obstacle_distances = []
 
         # 차량 박스 생성
         self.car_box = np.zeros((self.height, self.width), dtype=np.uint8)
@@ -83,6 +84,8 @@ class LaneAnalizer:
 
         self.currentAngle = 0
         self.error = False
+
+        self.lidar_masks = None
 
     def control_callback(self, msg):
         self.running = msg.data
@@ -132,7 +135,7 @@ class LaneAnalizer:
             self.pub_goal.publish(msg)
 
 
-            lane1OP, lane2OP, distanceObs = self.calculate_obstacle_probabilities(lane1_mask, lane2_mask)
+            lane1OP, lane2OP, distanceOb = self.calculate_obstacle_probabilities(lane1_mask, lane2_mask)
             # 확률 데이터 발행 부분
             lane_obstacle_msg = LaneObstacleProbabilities()
             
@@ -148,7 +151,7 @@ class LaneAnalizer:
             lane_obstacle_msg.obstacle_Lane2probabilities = obstacleLane2_probabilities
             
             obstacle_distances = Float32MultiArray()
-            obstacle_distances.data = distanceObs
+            obstacle_distances.data = distanceOb
             lane_obstacle_msg.obstacle_distances = obstacle_distances
 
             self.pub_lane_obstacle_probabilities.publish(lane_obstacle_msg)
@@ -161,9 +164,6 @@ class LaneAnalizer:
         except CvBridgeError as e:
             self.error = True
             rospy.logerr("Failed to convert image: %s", e)
-
-    def ultrasonic_callback(self, msg):
-        self.distances = msg.data
 
     # 모델 불러오기
     def load_model(self, checkpoints_path):
@@ -240,56 +240,58 @@ class LaneAnalizer:
         top_view = cv2.warpPerspective(cv_image, self.warp_matrix, (width, height), borderMode=cv2.BORDER_CONSTANT, borderValue=(255, 255, 255))
         return top_view
 
+    def scan_callback(self, scan_data):
+        self.lidar_masks = []
+        self.obstacle_distances = []
+        output_mask = np.zeros((self.height, self.width), dtype=np.uint8)
+        angle_min = scan_data.angle_min
+        angle_increment = scan_data.angle_increment
+        
+        front_lidar_points = []
+        
+        for i, range in enumerate(scan_data.ranges):
+            if range == float('inf') or range == float('-inf') or range == 0.0:
+                continue
+            angle = np.pi +angle_min - i * angle_increment
+            if -np.pi/2-1*np.pi/3 <= angle <= -np.pi/2+1*np.pi/3:  # -30 degrees to 30 degrees
+                x = self.car_center_x+int(((self.obstacle_radius +range) / self.resolution) * np.cos(angle))
+                y = self.car_TR_center_y+int(((self.obstacle_radius +range)/ self.resolution) * np.sin(angle))
+                if 0 <= x < self.width and 0 <= y < self.height:
+                    front_lidar_points.append((x, y, range, angle))
+        
+        if front_lidar_points:
+            for x, y, distance, angle in front_lidar_points:
+                obstacle_mask = np.zeros((self.height, self.width), dtype=np.uint8)
+                cv2.circle(obstacle_mask, (x, y), 20, 255, -1)
+                self.lidar_masks.append((obstacle_mask, distance))
+                cv2.circle(output_mask, (x, y), 20, 255, -1)
+        
+        cv2.imshow("Lidar Mask", output_mask)
+        cv2.waitKey(1)
+    
     def calculate_obstacle_probabilities(self, lane1_mask, lane2_mask):
-        # 장애물 위치를 계산하고 Gaussian 분포로 Mask 생성
-        # sigma = 0.5 / self.resolution  # 1m를 픽셀로 변환한 값
-
         lane1_probabilities = []
         lane2_probabilities = []
-        distances_within_range = []
-        for i in range(self.num_sensors):
-            distance = self.distances[i]/100+self.obstacle_radius
-            if distance > 3 or self.distances[i] ==0:
-                lane1_probabilities.append(0)
-                lane2_probabilities.append(0)
-                distances_within_range.append(distance)
-                continue  # 4m 이상의 장애물은 무시
-            
-            obstacle_mask = np.zeros((self.height, self.width), dtype=np.uint8)
-            sensor_x, sensor_y = self.sensor_positions[i]
-            angle = self.sensor_angles[i]
-            
-            # 장애물의 이미지 상 위치 계산
-            obstacle_x = sensor_x + distance * np.cos(angle)
-            obstacle_y = sensor_y + distance * (-np.sin(angle))
-            # print(distance)
-            obstacle_x = self.car_center_x+ int(obstacle_x / self.resolution)
-            obstacle_y = self.car_TR_center_y+ int(obstacle_y / self.resolution)
-
-            print(obstacle_x, obstacle_y)
-            # 원 형태의 Mask 생성
-            cv2.circle(obstacle_mask, (obstacle_x, obstacle_y), int(self.obstacle_radius/self.resolution), (255), -1)
-
-            cv2.imshow('Obstacle Mask'+str(i), obstacle_mask)
-            cv2.waitKey(10)
-            # Lane mask와 내적하여 확률 계산
+        distances = []
+        
+        for obstacle_mask, distance in self.lidar_masks:
             lane1_intersection = np.sum(lane1_mask * obstacle_mask)
             lane2_intersection = np.sum(lane2_mask * obstacle_mask)
             total_intersection = np.sum(obstacle_mask)
-
+            
             if total_intersection == 0:
                 lane1_probability = 0
                 lane2_probability = 0
             else:
                 lane1_probability = lane1_intersection / total_intersection
                 lane2_probability = lane2_intersection / total_intersection
-
+            
             lane1_probabilities.append(lane1_probability)
             lane2_probabilities.append(lane2_probability)
-            distances_within_range.append(distance)
-
-        return lane1_probabilities, lane2_probabilities, distances_within_range
-
+            distances.append(distance + self.obstacle_radius)
+        
+        return lane1_probabilities, lane2_probabilities, distances
+    
     def create_trajectory_masks(self):
         car_position = (self.car_center_x, self.car_TR_center_y)
         image_size = (self.height, self.width)

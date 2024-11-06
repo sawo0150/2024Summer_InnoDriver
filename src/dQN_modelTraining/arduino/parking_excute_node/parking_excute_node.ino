@@ -248,10 +248,13 @@ void loop() {
     change_angle(goal_steer);
     delay(5); // 예시로 0.01초마다 PID 제어를 수행합니다.
   }
-
-  Motor_Forward(goal_pulse_right, motor_right_1, motor_right_2, motor_right_PWM);  // Forward, PWM setting 0-255
-  Motor_Forward(goal_pulse_left, motor_left_1, motor_left_2, motor_left_PWM);  
-  
+  if(goal_power>=0){
+    Motor_Forward(goal_pulse_right, motor_right_1, motor_right_2, motor_right_PWM);  // Forward, PWM setting 0-255
+    Motor_Forward(goal_pulse_left, motor_left_1, motor_left_2, motor_left_PWM);  
+  }else{
+    Motor_Backward(0-goal_pulse_right, motor_right_1, motor_right_2, motor_right_PWM);
+    Motor_Backward(0-goal_pulse_left, motor_left_1, motor_left_2, motor_left_PWM);
+  }
   // forward(goal_pulse_left, goal_pulse_right);
   current_power = goal_power;
   

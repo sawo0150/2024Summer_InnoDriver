@@ -7,7 +7,10 @@
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(find missionRacing)/launch/testRacing.rviz" />
     <!-- <include file="$(find visionMapping)/launch/rosserial.launch"/> -->
 
-    <node name="lane_analizer" pkg="missionRacing" type="raceLaneAnalizer.py" output="screen"/>
+    <!-- <node name="lane_analizer" pkg="missionRacing" type="raceLaneAnalizer.py" output="screen"/> -->
+    <!-- <node name="AutonomousDrivingNode" pkg="dlBasedDrivingV2" type="driveForRaceV5.py" output="screen"/> -->
+    <!-- <node name="lane_analizer" pkg="missionRacing" type="raceLaneAnalizerV3.py" output="screen"/> -->
+    <node name="lane_analizer" pkg="missionRacing" type="crossWalkAnalizerV2.py" output="screen"/>
 
     <!-- <node name="stanley_controller" pkg="missionRacing" type="raceDrivingNode.py" output="screen"/> -->
 </launch>

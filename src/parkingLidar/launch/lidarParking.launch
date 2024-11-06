@@ -1,8 +1,12 @@
 <launch>
     <include file="$(find parkingLidar)/launch/rplidar_a2m12.launch"/>
+    <include file="$(find dQN_modelTraining)/launch/rosserial.launch"/>
 <!-- lsusb / dmesg | grep ttyUSB / ls /dev/ttyUSB* -->
 
-    <node name="lidar_mask_node" pkg="parkingLidar" type="findParkingSpace.py"/>
+    <!-- <node name="lidar_mask_node" pkg="parkingLidar" type="findParkingSpace.py"/> -->
     <!-- <node name="obstacle_detection" pkg="lidar" type="lidar_lanechange_flag.py"/> -->
+    
+    <node name="keyboard_control_node" pkg="dlBasedDrivingV2" type="keyboardControlNode.py" output="screen"/>
+    <node name="autonomous_parking_node" pkg="parkingLidar" type="ruleBasedParkingV2.py"/>
     
 </launch>

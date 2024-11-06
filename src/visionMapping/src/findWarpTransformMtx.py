@@ -8,10 +8,10 @@ import os
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 
-pt1 = [379, 716]
-pt2 = [858, 716]
-pt3 = [492, 352]
-pt4 = [743, 354]
+pt1 = [399, 713]
+pt2 = [890, 714]
+pt3 = [522, 383]
+pt4 = [772, 383]
 width = 448
 height = 300
 # meter 단위임
